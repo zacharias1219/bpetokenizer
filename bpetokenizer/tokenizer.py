@@ -48,41 +48,60 @@ class BPETokenizer(Tokenizer):
         return tokenizer
     
 
-    def train(self, texts, vocab_size, verbose=False, min_frequency=1) -> None:
+    def train(self, texts, vocab_size, verbose=False, min_frequency=1, batch_size=10000): 
         """
-        Train the tokenizer on the given texts and vocab size. The vocab size should be greater than 256.
-        params:
-            texts: str (the texts required for the tokenizer to train the vocabulary.)
-            vocab_size: int (the size of the vocab, gpt4 vocab size is around 100k)
-            verbose: bool (to get extra visibilty and the overview of internal processes)
-            min_frequency: int (the minimum frequency of the pair to be merged and added into the vocab as a new token)
+        Train the tokenizer on the given texts and vocab size.
+        
+        Args:
+            texts (str): The text corpus for training.
+            vocab_size (int): The desired vocabulary size.
+            verbose (bool, optional): Print progress updates. Defaults to False.
+            min_frequency (int, optional): Minimum frequency for merging. Defaults to 1.
+            batch_size (int, optional): Number of text chunks to process per batch. 
+                                         Defaults to 10000.
         """
         assert vocab_size >= 256
         num_merges = vocab_size - 256
 
-        text_chunks = re.findall(self.compiled_pattern, texts) # handles the desired pattern of tokens with regex pattern
-
-        ids = [list(tokens.encode("utf-8")) for tokens in text_chunks]      # List[List[int]]
+        text_chunks = re.findall(self.compiled_pattern, texts)
+        num_chunks = len(text_chunks)
+        
         merges = {}
-        vocab = {idx: bytes([idx]) for idx in range(256)} # vocab for first 255 bytes
+        vocab = {idx: bytes([idx]) for idx in range(256)} 
 
-        # bpe algorithm
+        # BPE Algorithm with Batch Processing
         for i in range(num_merges):
             stats = {}
-            for chunk in ids:
-                get_stats(chunk, stats)
-            pair = max(stats, key=stats.get) # returns the highest frequency pair
+            
+            for batch_start in range(0, num_chunks, batch_size):
+                batch_end = min(batch_start + batch_size, num_chunks)
+                batch_chunks = text_chunks[batch_start:batch_end]
+
+                ids = [list(tokens.encode("utf-8")) for tokens in batch_chunks]
+                for chunk in ids:
+                    get_stats(chunk, stats)
+
+            if not stats:  # No more pairs to merge
+                break
+
+            pair = max(stats, key=stats.get)
 
             if stats[pair] < min_frequency:
                 break
 
             idx = 256 + i
-            ids = [merge(chunk_ids, pair, idx) for chunk_ids in ids] # merge all the max occuring pair in the each chunk in ids
+
+            # Efficiently merge within batches
+            for batch_start in range(0, num_chunks, batch_size):
+                batch_end = min(batch_start + batch_size, num_chunks)
+                for j in range(batch_start, batch_end):
+                    text_chunks[j] = re.sub(f"{re.escape(pair[0])}{re.escape(pair[1])}", chr(idx), text_chunks[j])
+
             merges[pair] = idx
-            vocab[idx] = vocab[pair[0]] + vocab[pair[1]] # concat of bytes
+            vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
 
             if verbose:
-                print(f"merging {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]}) had {stats[pair]} frequency")
+                print(f"Merging {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]}) had {stats[pair]} frequency")
 
         self.merges = merges
         self.vocab = vocab
