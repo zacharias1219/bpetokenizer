@@ -1,4 +1,3 @@
-// bpe.go
 package main
 
 /*

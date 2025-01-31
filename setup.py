@@ -1,5 +1,7 @@
 import os
-from setuptools import find_packages, setup
+from setuptools import setup, find_packages
+from setuptools.command.build_ext import build_ext
+import subprocess
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -9,6 +11,12 @@ with open(os.path.join(here, "bpetokenizer/version.py")) as f:
     exec(f.read(), version)
 __version__ = version["__version__"]
 
+# Custom build command to compile Go code
+class BuildGoExtension(build_ext):
+    def run(self):
+        # Compile Go code into a shared library
+        go_dir = os.path.join(here, "bpetokenizer/go")
+        subprocess.check_call(["go", "build", "-buildmode=c-shared", "-o", os.path.join(go_dir, "libbpe.so"), os.path.join(go_dir, "bpe.go")])
 
 with open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
@@ -17,7 +25,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 setup(
     name="bpetokenizer",
     version=__version__,
-    description="A Byte Pair Encoding (BPE) tokenizer, which algorithmically follows along the GPT tokenizer(tiktoken), allows you to train your own tokenizer. The tokenizer is capable of handling special tokens and uses a customizable regex pattern for tokenization(includes the gpt4 regex pattern). supports `save` and `load` tokenizers in the `json` and `file` format. The `bpetokenizer` also supports [pretrained](bpetokenizer/pretrained/) tokenizers.",
+    description="A Byte Pair Encoding (BPE) tokenizer with Go optimizations.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Hk669/bpetokenizer",
@@ -26,7 +34,10 @@ setup(
     license="MIT",
     packages=find_packages(include=["bpetokenizer"]),
     package_data={
-        'bpetokenizer': ['pretrained/wi17k_base/wi17k_base.json'],
+        'bpetokenizer': [
+            'pretrained/wi17k_base/wi17k_base.json',
+            'go/libbpe.so',  # Include the Go shared library
+        ],
     },
     classifiers=[
         "License :: OSI Approved :: MIT License",
@@ -38,4 +49,6 @@ setup(
         "dev": ["pytest", "twine"],
     },
     python_requires=">=3.9,<3.13",
+    cmdclass={'build_ext': BuildGoExtension},
+    ext_modules=[],  # Placeholder for Go compilation
 )
