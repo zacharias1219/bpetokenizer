@@ -1,87 +1,80 @@
 package main
 
-/*
-#include <stdlib.h>
-*/
-import "C"
 import (
 	"encoding/json"
-	"sort"
+	"fmt"
+	"os"
+	"strings"
 )
 
-// TrainBPE implements the BPE algorithm in Go
-func TrainBPE(text string, vocabSize int) map[[2]int]int {
-	tokens := []byte(text)
-	merges := make(map[[2]int]int)
-	vocab := make(map[int][]byte)
-
-	// Initialize vocab with byte tokens
-	for i := 0; i < 256; i++ {
-		vocab[i] = []byte{byte(i)}
-	}
-
-	// BPE algorithm
-	for i := 256; i < vocabSize; i++ {
-		pair := findMostFrequentPair(tokens)
-		if len(pair) == 0 {
-			break
-		}
-		merges[pair] = i
-		tokens = mergePair(tokens, pair, i)
-		vocab[i] = append(vocab[pair[0]], vocab[pair[1]]...)
-	}
-
-	return merges
+type Tokenizer struct {
+	Vocab  map[string]int
+	Merges map[string]string
 }
 
-// Helper function to find the most frequent pair
-func findMostFrequentPair(tokens []byte) [2]int {
-	counts := make(map[[2]int]int)
-	for i := 0; i < len(tokens)-1; i++ {
-		pair := [2]int{int(tokens[i]), int(tokens[i+1])}
-		counts[pair]++
+func NewTokenizer() *Tokenizer {
+	return &Tokenizer{
+		Vocab:  make(map[string]int),
+		Merges: make(map[string]string),
 	}
-
-	if len(counts) == 0 {
-		return [2]int{}
-	}
-
-	var maxPair [2]int
-	maxCount := 0
-	for pair, count := range counts {
-		if count > maxCount {
-			maxPair = pair
-			maxCount = count
-		}
-	}
-
-	return maxPair
 }
 
-// Helper function to merge a pair in the tokens
-func mergePair(tokens []byte, pair [2]int, idx int) []byte {
-	var newTokens []byte
-	i := 0
-	for i < len(tokens) {
-		if i < len(tokens)-1 && int(tokens[i]) == pair[0] && int(tokens[i+1]) == pair[1] {
-			newTokens = append(newTokens, byte(idx))
-			i += 2
+func (t *Tokenizer) Train(text string, vocabSize int) {
+	// Tokenization logic goes here
+	words := strings.Split(text, " ")
+	for i, word := range words {
+		t.Vocab[word] = i + 1
+	}
+	fmt.Println("Training completed.")
+}
+
+func (t *Tokenizer) Encode(text string) []int {
+	tokens := strings.Split(text, " ")
+	var ids []int
+	for _, token := range tokens {
+		if id, exists := t.Vocab[token]; exists {
+			ids = append(ids, id)
 		} else {
-			newTokens = append(newTokens, tokens[i])
-			i++
+			ids = append(ids, 0) // Unknown token
 		}
 	}
-	return newTokens
+	return ids
 }
 
-//export TrainBPEWrapper
-func TrainBPEWrapper(text *C.char, vocabSize C.int) *C.char {
-	goText := C.GoString(text)
-	merges := TrainBPE(goText, int(vocabSize))
-
-	// Convert merges to JSON string
-	jsonStr, _ := json.Marshal(merges)
-	return C.CString(string(jsonStr))
+func (t *Tokenizer) Decode(ids []int) string {
+	var words []string
+	for _, id := range ids {
+		for word, wordID := range t.Vocab {
+			if wordID == id {
+				words = append(words, word)
+				break
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }
 
-func main() {}
+func (t *Tokenizer) Save(filename string) error {
+	data, err := json.Marshal(t)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, data, 0644)
+}
+
+func (t *Tokenizer) Load(filename string) error {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, t)
+}
+
+func main() {
+	tokenizer := NewTokenizer()
+	text := "Hello world this is a test"
+	tokenizer.Train(text, 100)
+	encoded := tokenizer.Encode("Hello world")
+	fmt.Println("Encoded:", encoded)
+	fmt.Println("Decoded:", tokenizer.Decode(encoded))
+}
