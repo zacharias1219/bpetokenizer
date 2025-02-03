@@ -1,80 +1,144 @@
-package main
+package bpe
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"strings"
+	"bytes"
+	"regexp"
 )
 
 type Tokenizer struct {
-	Vocab  map[string]int
-	Merges map[string]string
+	Vocab          map[int][]byte
+	Merges         map[Pair]int
+	SpecialTokens  map[string]int
+	Pattern        *regexp.Regexp
+	InverseMerges  map[int]Pair
+	InverseVocab   map[string]int
+	InverseSpecial map[int]string
 }
 
-func NewTokenizer() *Tokenizer {
-	return &Tokenizer{
-		Vocab:  make(map[string]int),
-		Merges: make(map[string]string),
+type Pair struct {
+	A, B int
+}
+
+func NewTokenizer(specialTokens map[string]int) *Tokenizer {
+	t := &Tokenizer{
+		Vocab:          make(map[int][]byte),
+		Merges:         make(map[Pair]int),
+		SpecialTokens:  specialTokens,
+		InverseMerges:  make(map[int]Pair),
+		InverseVocab:   make(map[string]int),
+		InverseSpecial: make(map[int]string),
 	}
+	
+	// Initialize base vocabulary
+	for i := 0; i < 256; i++ {
+		t.Vocab[i] = []byte{byte(i)}
+		t.InverseVocab[string([]byte{byte(i)})] = i
+	}
+	
+	// Initialize special tokens
+	for token, id := range specialTokens {
+		t.Vocab[id] = []byte(token)
+		t.InverseSpecial[id] = token
+	}
+	
+	t.Pattern = CompilePattern(GPT4SplitPattern)
+	return t
 }
 
 func (t *Tokenizer) Train(text string, vocabSize int) {
-	// Tokenization logic goes here
-	words := strings.Split(text, " ")
-	for i, word := range words {
-		t.Vocab[word] = i + 1
+	if vocabSize <= 256 {
+		return
 	}
-	fmt.Println("Training completed.")
+
+	textChunks := t.SplitText(text)
+	ids := make([][]int, len(textChunks))
+
+	// Convert text chunks to byte IDs
+	for i, chunk := range textChunks {
+		ids[i] = bytesToIDs([]byte(chunk))
+	}
+
+	// BPE Algorithm
+	for i := 256; i < vocabSize; i++ {
+		stats := make(map[Pair]int)
+		for _, chunkIDs := range ids {
+			chunkStats := getStats(chunkIDs)
+			for p, count := range chunkStats {
+				stats[p] += count
+			}
+		}
+
+		if len(stats) == 0 {
+			break
+		}
+
+		bestPair := getMaxPair(stats)
+		newID := i
+
+		// Perform merge
+		for j := range ids {
+			ids[j] = merge(ids[j], bestPair, newID)
+		}
+
+		// Update vocab and merges
+		t.Merges[bestPair] = newID
+		t.InverseMerges[newID] = bestPair
+		t.Vocab[newID] = append(t.Vocab[bestPair.A], t.Vocab[bestPair.B]...)
+		t.InverseVocab[string(t.Vocab[newID])] = newID
+	}
 }
 
 func (t *Tokenizer) Encode(text string) []int {
-	tokens := strings.Split(text, " ")
 	var ids []int
-	for _, token := range tokens {
-		if id, exists := t.Vocab[token]; exists {
-			ids = append(ids, id)
-		} else {
-			ids = append(ids, 0) // Unknown token
+	chunks := t.SplitText(text)
+
+	for _, chunk := range chunks {
+		if specialID, exists := t.SpecialTokens[chunk]; exists {
+			ids = append(ids, specialID)
+			continue
 		}
+
+		byteSeq := []byte(chunk)
+		chunkIDs := bytesToIDs(byteSeq)
+		
+		for len(chunkIDs) >= 2 {
+			pairs := getStats(chunkIDs)
+			if len(pairs) == 0 {
+				break
+			}
+
+			var bestPair Pair
+			var minID = int(^uint(0) >> 1)
+			for p := range pairs {
+				if id, exists := t.Merges[p]; exists && id < minID {
+					minID = id
+					bestPair = p
+				}
+			}
+
+			if minID == int(^uint(0) >> 1) {
+				break
+			}
+
+			chunkIDs = merge(chunkIDs, bestPair, minID)
+		}
+		ids = append(ids, chunkIDs...)
 	}
 	return ids
 }
 
 func (t *Tokenizer) Decode(ids []int) string {
-	var words []string
+	var buffer bytes.Buffer
 	for _, id := range ids {
-		for word, wordID := range t.Vocab {
-			if wordID == id {
-				words = append(words, word)
-				break
-			}
+		if token, exists := t.InverseSpecial[id]; exists {
+			buffer.WriteString(token)
+			continue
 		}
+		buffer.Write(t.Vocab[id])
 	}
-	return strings.Join(words, " ")
+	return buffer.String()
 }
 
-func (t *Tokenizer) Save(filename string) error {
-	data, err := json.Marshal(t)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filename, data, 0644)
-}
-
-func (t *Tokenizer) Load(filename string) error {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, t)
-}
-
-func main() {
-	tokenizer := NewTokenizer()
-	text := "Hello world this is a test"
-	tokenizer.Train(text, 100)
-	encoded := tokenizer.Encode("Hello world")
-	fmt.Println("Encoded:", encoded)
-	fmt.Println("Decoded:", tokenizer.Decode(encoded))
+func (t *Tokenizer) SplitText(text string) []string {
+	return t.Pattern.FindAllString(text, -1)
 }
