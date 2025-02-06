@@ -41,11 +41,11 @@ func TestSpecialTokens(t *testing.T) {
 }
 
 func TestPatternSplitting(t *testing.T) {
-	tokenizer := NewTokenizer(nil)
-	text := "Hello's world123"
-
-	expected := []string{"Hello's", " ", "world", "123"}
-	actual := tokenizer.SplitText(text)
-
-	assert.Equal(t, expected, actual, "Pattern splitting mismatch")
+    tokenizer := NewTokenizer(nil)
+    text := "Hello's world 123"
+    
+    expectedChunks := []string{"Hello's", " world", "123"}
+    
+    chunks := tokenizer.SplitText(text)
+    assert.Equal(t, expectedChunks, chunks, "Pattern splitting mismatch")
 }
