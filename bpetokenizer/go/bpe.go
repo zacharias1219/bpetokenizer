@@ -2,14 +2,15 @@ package bpe
 
 import (
 	"bytes"
-	"regexp"
+
+	"github.com/dlclark/regexp2"
 )
 
 type Tokenizer struct {
 	Vocab          map[int][]byte
 	Merges         map[Pair]int
 	SpecialTokens  map[string]int
-	Pattern        *regexp.Regexp
+	Pattern        *regexp2.Regexp
 	InverseMerges  map[int]Pair
 	InverseVocab   map[string]int
 	InverseSpecial map[int]string
@@ -28,19 +29,19 @@ func NewTokenizer(specialTokens map[string]int) *Tokenizer {
 		InverseVocab:   make(map[string]int),
 		InverseSpecial: make(map[int]string),
 	}
-	
+
 	// Initialize base vocabulary
 	for i := 0; i < 256; i++ {
 		t.Vocab[i] = []byte{byte(i)}
 		t.InverseVocab[string([]byte{byte(i)})] = i
 	}
-	
+
 	// Initialize special tokens
 	for token, id := range specialTokens {
 		t.Vocab[id] = []byte(token)
 		t.InverseSpecial[id] = token
 	}
-	
+
 	t.Pattern = CompilePattern(GPT4SplitPattern)
 	return t
 }
@@ -100,7 +101,7 @@ func (t *Tokenizer) Encode(text string) []int {
 
 		byteSeq := []byte(chunk)
 		chunkIDs := bytesToIDs(byteSeq)
-		
+
 		for len(chunkIDs) >= 2 {
 			pairs := getStats(chunkIDs)
 			if len(pairs) == 0 {
@@ -116,7 +117,7 @@ func (t *Tokenizer) Encode(text string) []int {
 				}
 			}
 
-			if minID == int(^uint(0) >> 1) {
+			if minID == int(^uint(0)>>1) {
 				break
 			}
 
@@ -140,5 +141,11 @@ func (t *Tokenizer) Decode(ids []int) string {
 }
 
 func (t *Tokenizer) SplitText(text string) []string {
-	return t.Pattern.FindAllString(text, -1)
+	var chunks []string
+	m, _ := t.Pattern.FindStringMatch(text)
+	for m != nil {
+		chunks = append(chunks, m.String())
+		m, _ = t.Pattern.FindNextMatch(m)
+	}
+	return chunks
 }

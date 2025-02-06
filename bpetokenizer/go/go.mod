@@ -2,7 +2,10 @@ module github.com/zacharias1219/bpetokenizer/go
 
 go 1.20
 
-require github.com/stretchr/testify v1.8.4
+require (
+	github.com/dlclark/regexp2 v1.11.4
+	github.com/stretchr/testify v1.8.4
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

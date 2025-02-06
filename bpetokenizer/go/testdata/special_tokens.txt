@@ -1,0 +1,2 @@
+<|startoftext|>Hello World<|endoftext|>
+[SPECIAL1] Test [SPECIAL2]

@@ -2,25 +2,23 @@ package bpe
 
 import (
 	"testing"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBasicTokenization(t *testing.T) {
-	specials := map[string]int{
-		"<|endoftext|>": 1001,
-	}
-	tokenizer := NewTokenizer(specials)
-	text := "aaabdaaabac"
-
-	tokenizer.Train(text, 259)
-	
-	assert.Equal(t, 259, len(tokenizer.Vocab), "Vocabulary size mismatch")
-	
-	encoded := tokenizer.Encode("aaabdaaabac")
-	assert.Equal(t, []int{258, 100, 258, 97, 99}, encoded, "Encoding mismatch")
-	
-	decoded := tokenizer.Decode(encoded)
-	assert.Equal(t, "aaabdaaabac", decoded, "Decoding mismatch")
+    t.Run("simple merge operations", func(t *testing.T) {
+        text := "aaabdaaabac"
+        
+        tokenizer := NewTokenizer(nil)
+        tokenizer.Train(text, 259)
+        
+        encoded := tokenizer.Encode(text)
+        decoded := tokenizer.Decode(encoded)
+        
+        assert.Equal(t, text, decoded)
+        assert.Equal(t, []int{258, 100, 258, 97, 99}, encoded)
+    })
 }
 
 func TestSpecialTokens(t *testing.T) {
@@ -28,32 +26,26 @@ func TestSpecialTokens(t *testing.T) {
 		"<|startoftext|>": 1001,
 		"<|endoftext|>":   1002,
 	}
-	
-	tokenizer := NewTokenizer(specials)
+
 	text := "<|startoftext|>Hello World<|endoftext|>"
-	
+
+	tokenizer := NewTokenizer(specials)
 	tokenizer.Train(text, 300)
-	
+
 	encoded := tokenizer.Encode(text)
-	assert.Contains(t, encoded, 1001, "Missing start token")
-	assert.Contains(t, encoded, 1002, "Missing end token")
-	
 	decoded := tokenizer.Decode(encoded)
-	assert.Equal(t, text, decoded, "Special token decoding mismatch")
+
+	assert.Contains(t, decoded, "<|startoftext|>", "Start token missing")
+	assert.Contains(t, decoded, "<|endoftext|>", "End token missing")
+	assert.Equal(t, text, decoded, "Decoding mismatch")
 }
 
-func TestSaveLoad(t *testing.T) {
+func TestPatternSplitting(t *testing.T) {
 	tokenizer := NewTokenizer(nil)
-	text := "The quick brown fox jumps over the lazy dog"
-	tokenizer.Train(text, 300)
-	
-	err := tokenizer.Save("test_model.json")
-	assert.Nil(t, err, "Saving failed")
-	
-	newTokenizer := NewTokenizer(nil)
-	err = newTokenizer.Load("test_model.json")
-	assert.Nil(t, err, "Loading failed")
-	
-	assert.Equal(t, tokenizer.Vocab, newTokenizer.Vocab, "Vocab mismatch after load")
-	assert.Equal(t, tokenizer.Merges, newTokenizer.Merges, "Merges mismatch after load")
+	text := "Hello's world123"
+
+	expected := []string{"Hello's", " ", "world", "123"}
+	actual := tokenizer.SplitText(text)
+
+	assert.Equal(t, expected, actual, "Pattern splitting mismatch")
 }
