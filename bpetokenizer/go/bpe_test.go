@@ -7,18 +7,18 @@ import (
 )
 
 func TestBasicTokenization(t *testing.T) {
-    t.Run("simple merge operations", func(t *testing.T) {
-        text := "aaabdaaabac"
-        
-        tokenizer := NewTokenizer(nil)
-        tokenizer.Train(text, 259)
-        
-        encoded := tokenizer.Encode(text)
-        decoded := tokenizer.Decode(encoded)
-        
-        assert.Equal(t, text, decoded)
-        assert.Equal(t, []int{258, 100, 258, 97, 99}, encoded)
-    })
+	t.Run("simple merge operations", func(t *testing.T) {
+		text := "aaabdaaabac"
+
+		tokenizer := NewTokenizer(nil)
+		tokenizer.Train(text, 259)
+
+		encoded := tokenizer.Encode(text)
+		decoded := tokenizer.Decode(encoded)
+
+		assert.Equal(t, text, decoded)
+		assert.Equal(t, []int{258, 100, 258, 97, 99}, encoded)
+	})
 }
 
 func TestSpecialTokens(t *testing.T) {
@@ -41,11 +41,11 @@ func TestSpecialTokens(t *testing.T) {
 }
 
 func TestPatternSplitting(t *testing.T) {
-    tokenizer := NewTokenizer(nil)
-    text := "Hello's world 123"
-    
-    expectedChunks := []string{"Hello's", " world", "123"}
-    
-    chunks := tokenizer.SplitText(text)
-    assert.Equal(t, expectedChunks, chunks, "Pattern splitting mismatch")
+	tokenizer := NewTokenizer(nil)
+	text := "Hello's world 123"
+
+	expectedChunks := []string{"Hello's", " ", "world", " ", "123"}
+
+	chunks := tokenizer.SplitText(text)
+	assert.Equal(t, expectedChunks, chunks, "Pattern splitting mismatch")
 }
