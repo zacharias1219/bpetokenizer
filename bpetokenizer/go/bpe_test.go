@@ -133,7 +133,8 @@ func TestExactEncodedIDs(t *testing.T) {
 }
 
 func TestPatternConfiguration(t *testing.T) {
-    customPattern := `(\d+|\w+)(?:\b|_)`
+    customPattern := `([a-zA-Z]+|\d+)`
+
     tokenizer := &Tokenizer{
         Pattern: regexp2.MustCompile(customPattern, regexp2.None),
     }
