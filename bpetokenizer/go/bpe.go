@@ -48,7 +48,7 @@ func NewTokenizer(specialTokens map[string]int) *Tokenizer {
 
 func (t *Tokenizer) Train(text string, vocabSize int) {
 	if vocabSize <= 256 {
-		return
+		panic("vocab_size must be >= 256")
 	}
 
 	textChunks := t.SplitText(text)
