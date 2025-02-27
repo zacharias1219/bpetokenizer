@@ -1,10 +1,10 @@
-module github.com/zacharias1219/bpetokenizer/go
+module bpetokenizer
 
-go 1.20
+go 1.23.5
 
 require (
-	github.com/dlclark/regexp2 v1.11.4
-	github.com/stretchr/testify v1.8.4
+	github.com/dlclark/regexp2 v1.11.5
+	github.com/stretchr/testify v1.10.0
 )
 
 require (

@@ -49,7 +49,7 @@ func TestPatternSplitting(t *testing.T) {
 
 	expectedChunks := []string{"Hello's", " ", "world", " ", "123"}
 
-	chunks := tokenizer.SplitText(text)
+	chunks := tokenizer.splitTextThreadSafe(text)
 	assert.Equal(t, expectedChunks, chunks, "Pattern splitting mismatch")
 }
 
@@ -67,23 +67,6 @@ func TestInvalidVocabSize(t *testing.T) {
 	})
 }
 
-func TestConcurrentEncode(t *testing.T) {
-	tokenizer := NewTokenizer(nil)
-	text := "concurrency test"
-	tokenizer.Train(text, 300)
-
-	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			encoded := tokenizer.Encode(text)
-			decoded := tokenizer.Decode(encoded)
-			assert.Equal(t, text, decoded)
-		}()
-	}
-	wg.Wait()
-}
 
 func TestFuzzRoundtrip(t *testing.T) {
 	tokenizer := NewTokenizer(nil)
@@ -141,7 +124,7 @@ func TestPatternConfiguration(t *testing.T) {
 
     text := "Hello123World"
     expected := []string{"Hello", "123", "World"}
-    assert.Equal(t, expected, tokenizer.SplitText(text))
+    assert.Equal(t, expected, tokenizer.splitTextThreadSafe(text))
 }
 
 func TestLargeTextHandling(t *testing.T) {
@@ -154,4 +137,64 @@ func TestLargeTextHandling(t *testing.T) {
 
 	assert.Equal(t, text, decoded)
 	assert.True(t, len(encoded) < len(text)/2, "Compression ratio check")
+}
+
+func TestConcurrentTraining(t *testing.T) {
+	tokenizer := NewTokenizer(nil)
+	text := strings.Repeat("concurrent training test ", 1000)
+	
+	// Run multiple training operations concurrently
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			tokenizer.Train(text, 300)
+		}()
+	}
+	wg.Wait()
+
+	// Verify valid state after concurrent training
+	assert.Greater(t, len(tokenizer.Vocab), 256)
+	assert.Greater(t, len(tokenizer.Merges), 0)
+}
+
+func TestConcurrentEncode(t *testing.T) {
+	tokenizer := NewTokenizer(nil)
+	text := strings.Repeat("concurrent encode test ", 1000)
+	tokenizer.Train(text, 300)
+
+	// Concurrent encoding with validation
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			encoded := tokenizer.Encode(text)
+			decoded := tokenizer.Decode(encoded)
+			assert.Equal(t, text, decoded)
+		}()
+	}
+	wg.Wait()
+}
+
+func BenchmarkParallelTrain(b *testing.B) {
+	text := strings.Repeat("benchmark training text ", 10000)
+	tokenizer := NewTokenizer(nil)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tokenizer.Train(text, 500)
+	}
+}
+
+func BenchmarkParallelEncode(b *testing.B) {
+	text := strings.Repeat("benchmark encoding text ", 10000)
+	tokenizer := NewTokenizer(nil)
+	tokenizer.Train(text, 500)
+	
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tokenizer.Encode(text)
+	}
 }
